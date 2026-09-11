@@ -5,6 +5,7 @@ const connectDB = require('./config/db');
 
 // Import des routes
 const authRoutes = require('./routes/authRoutes');
+const listingRoutes = require('./routes/listingRoutes');
 
 dotenv.config();
 
@@ -19,6 +20,7 @@ app.use(express.json());
 
 // Déclaration des routes de l'API
 app.use('/api/auth', authRoutes);
+app.use('/api/listings', listingRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'API BitLister opérationnelle (CommonJS)' });
