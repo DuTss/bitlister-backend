@@ -6,7 +6,8 @@ exports.getAllListings = async (req, res) => {
     const { category, search } = req.query;
     let query = { status: 'ACTIVE' }; // On affiche uniquement les annonces actives
 
-    if (category) {
+    // Seule modification : vérifier que category n'est pas vide ni égal à 'Toutes'
+    if (category && category !== 'Toutes') {
       query.category = category;
     }
 
@@ -19,8 +20,8 @@ exports.getAllListings = async (req, res) => {
     }
 
     const listings = await Listing.find(query)
-      .populate('seller', 'username lightningAddress') // Inclut le pseudo et l'adresse Lightning du vendeur
-      .sort({ createdAt: -1 }); // Les plus récentes en premier
+      .populate('seller', 'username lightningAddress')
+      .sort({ createdAt: -1 });
 
     res.json(listings);
   } catch (error) {
@@ -91,5 +92,36 @@ exports.deleteListing = async (req, res) => {
     res.json({ message: 'Annonce supprimée avec succès' });
   } catch (error) {
     res.status(500).json({ message: 'Erreur lors de la suppression', error: error.message });
+  }
+};
+
+// 5. Mettre à jour une annonce (Protégé)
+exports.updateListing = async (req, res) => {
+  try {
+    const listing = await Listing.findById(req.params.id);
+
+    if (!listing) {
+      return res.status(404).json({ message: 'Annonce introuvable' });
+    }
+
+    // Vérifier si l'utilisateur connecté est bien le propriétaire de l'annonce
+    if (listing.seller.toString() !== req.user.userId) {
+      return res.status(403).json({ message: 'Action non autorisée : Vous n\'êtes pas le propriétaire' });
+    }
+
+    const { title, description, priceInSats, category, location } = req.body;
+
+    Object.assign(listing, { title, description, priceInSats, category, location });
+
+    await listing.save();
+
+    await listing.populate('seller', 'username lightningAddress');
+
+    res.json({
+      message: 'Annonce mise à jour avec succès',
+      listing,
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Erreur lors de la mise à jour', error: error.message });
   }
 };

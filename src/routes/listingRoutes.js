@@ -9,6 +9,7 @@ router.get('/:id', listingController.getListingById);
 
 // Routes privées (nécessitent un token JWT)
 router.post('/', auth, listingController.createListing);
+router.put('/:id', auth, listingController.updateListing);
 router.delete('/:id', auth, listingController.deleteListing);
 
 module.exports = router;
