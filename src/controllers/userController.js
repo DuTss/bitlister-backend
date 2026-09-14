@@ -1,6 +1,8 @@
 const User = require('../models/User');
 const Listing = require('../models/Listing');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
+const { sendResetPasswordEmail } = require('../config/mailer');
 
 // 1. Récupérer le profil de l'utilisateur connecté
 exports.getProfile = async (req, res) => {
@@ -136,5 +138,66 @@ exports.getFavorites = async (req, res) => {
     res.json(user.favorites);
   } catch (error) {
     res.status(500).json({ message: 'Erreur lors de la récupération des favoris.', error: error.message });
+  }
+};
+
+// 5. Demander un lien de modification de mot de passe par email
+exports.requestPasswordReset = async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id || req.user._id;
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: 'Utilisateur non trouvé.' });
+    }
+
+    // Génération du token éphémère (1 heure)
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    user.resetPasswordToken = resetToken;
+    user.resetPasswordExpires = Date.now() + 3600000; 
+
+    await user.save();
+
+    // Envoi de l'email via la configuration Nodemailer
+    await sendResetPasswordEmail(user.email || user.username, resetToken);
+
+    res.json({ message: 'Un e-mail de confirmation a été envoyé.' });
+  } catch (error) {
+    res.status(500).json({ message: 'Erreur lors de l\'envoi de l\'email.', error: error.message });
+  }
+};
+
+// 6. Réinitialiser / Confirmer le nouveau mot de passe via le Token (Route Publique)
+exports.resetPassword = async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    if (!token || !newPassword || newPassword.length < 6) {
+      return res.status(400).json({ message: 'Données invalides ou mot de passe trop court (6 caractères min).' });
+    }
+
+    // Recherche de l'utilisateur avec un token valide et non expiré
+    const user = await User.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: 'Le lien est invalide ou a expiré.' });
+    }
+
+    // Hashage du mot de passe (utilise bcryptjs comme dans ton fichier)
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(newPassword, salt);
+
+    // Nettoyage des champs de token
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+
+    await user.save();
+
+    res.json({ message: 'Votre mot de passe a été modifié avec succès.' });
+  } catch (error) {
+    res.status(500).json({ message: 'Erreur lors de la modification du mot de passe.', error: error.message });
   }
 };

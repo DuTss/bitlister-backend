@@ -32,6 +32,8 @@ const userSchema = new mongoose.Schema(
         ref: 'Listing',
       },
     ],
+    resetPasswordToken: { type: String, default: null },
+    resetPasswordExpires: { type: Date, default: null }
   },
   {
     timestamps: true, // Génère automatiquement createdAt et updatedAt
