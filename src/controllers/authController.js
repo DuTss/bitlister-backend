@@ -5,17 +5,17 @@ const jwt = require('jsonwebtoken');
 // Inscription
 exports.register = async (req, res) => {
   try {
-    const { username, password, lightningAddress } = req.body;
+    const { email, pseudo, password, lightningAddress } = req.body;
 
     // 1. Vérifier si les champs obligatoires sont fournis
-    if (!username || !password) {
-      return res.status(400).json({ message: 'Veuillez remplir tous les champs obligatoires' });
+    if (!email || !pseudo || !password) {
+      return res.status(400).json({ message: 'Veuillez remplir tous les champs obligatoires (email, pseudo, mot de passe)' });
     }
 
-    // 2. Vérifier si le pseudo est déjà pris
-    const existingUser = await User.findOne({ username });
-    if (existingUser) {
-      return res.status(400).json({ message: 'Ce nom d\'utilisateur est déjà pris' });
+    // 2. Vérifier si l'email est déjà utilisé
+    const existingEmail = await User.findOne({ email: email.toLowerCase() });
+    if (existingEmail) {
+      return res.status(400).json({ message: 'Cet email est déjà utilisé' });
     }
 
     // 3. Hasher le mot de passe
@@ -24,14 +24,16 @@ exports.register = async (req, res) => {
 
     // 4. Créer l'utilisateur
     const user = await User.create({
-      username,
+      email: email.toLowerCase(),
+      pseudo: pseudo.trim(),
       password: hashedPassword,
-      lightningAddress: lightningAddress || '',
+      lightningAddress: lightningAddress ? lightningAddress.trim() : '',
+      favorites: [],
     });
 
     // 5. Générer un token JWT
     const token = jwt.sign(
-      { userId: user._id, username: user.username },
+      { userId: user._id, email: user.email, pseudo: user.pseudo },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -41,26 +43,28 @@ exports.register = async (req, res) => {
       token,
       user: {
         id: user._id,
-        username: user.username,
+        email: user.email,
+        pseudo: user.pseudo,
         lightningAddress: user.lightningAddress,
+        favorites: user.favorites,
       },
     });
   } catch (error) {
-    res.status(500).json({ message: 'Erreur serveur lors de l\'inscription', error: error.message });
+    res.status(500).json({ message: "Erreur serveur lors de l'inscription", error: error.message });
   }
 };
 
 // Connexion
 exports.login = async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { email, password } = req.body;
 
-    if (!username || !password) {
-      return res.status(400).json({ message: 'Veuillez remplir tous les champs' });
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Veuillez fournir un email et un mot de passe' });
     }
 
-    // 1. Chercher l'utilisateur
-    const user = await User.findOne({ username });
+    // 1. Chercher l'utilisateur par son email
+    const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) {
       return res.status(400).json({ message: 'Identifiants invalides' });
     }
@@ -73,7 +77,7 @@ exports.login = async (req, res) => {
 
     // 3. Générer le token JWT
     const token = jwt.sign(
-      { userId: user._id, username: user.username },
+      { userId: user._id, email: user.email, pseudo: user.pseudo },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -83,8 +87,10 @@ exports.login = async (req, res) => {
       token,
       user: {
         id: user._id,
-        username: user.username,
+        email: user.email,
+        pseudo: user.pseudo,
         lightningAddress: user.lightningAddress,
+        favorites: user.favorites || [],
       },
     });
   } catch (error) {

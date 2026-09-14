@@ -20,7 +20,7 @@ exports.getAllListings = async (req, res) => {
     }
 
     const listings = await Listing.find(query)
-      .populate('seller', 'username lightningAddress')
+      .populate('seller', 'pseudo lightningAddress')
       .sort({ createdAt: -1 });
 
     res.json(listings);
@@ -32,7 +32,7 @@ exports.getAllListings = async (req, res) => {
 // 2. Récupérer une seule annonce par son ID
 exports.getListingById = async (req, res) => {
   try {
-    const listing = await Listing.findById(req.params.id).populate('seller', 'username lightningAddress');
+    const listing = await Listing.findById(req.params.id).populate('seller', 'pseudo lightningAddress');
 
     if (!listing) {
       return res.status(404).json({ message: 'Annonce introuvable' });
@@ -63,7 +63,7 @@ exports.createListing = async (req, res) => {
     });
 
     // Populate les infos du vendeur pour le retour JSON
-    await listing.populate('seller', 'username lightningAddress');
+    await listing.populate('seller', 'pseudo lightningAddress');
 
     res.status(201).json({
       message: 'Annonce publiée avec succès',
@@ -74,28 +74,74 @@ exports.createListing = async (req, res) => {
   }
 };
 
-// 4. Supprimer une annonce (Protégé)
-exports.deleteListing = async (req, res) => {
+// 4.Récupérer uniquement les annonces du vendeur connecté
+exports.getMyListings = async (req, res) => {
   try {
-    const listing = await Listing.findById(req.params.id);
-
-    if (!listing) {
-      return res.status(404).json({ message: 'Annonce introuvable' });
-    }
-
-    // Vérifier si l'utilisateur connecté est bien le propriétaire de l'annonce
-    if (listing.seller.toString() !== req.user.userId) {
-      return res.status(403).json({ message: 'Action non autorisée : Vous n\'êtes pas le propriétaire' });
-    }
-
-    await listing.deleteOne();
-    res.json({ message: 'Annonce supprimée avec succès' });
+    const userId = req.user._id || req.user.id;
+    const listings = await Listing.find({ seller: userId }).sort({ createdAt: -1 });
+    
+    res.json(listings);
   } catch (error) {
-    res.status(500).json({ message: 'Erreur lors de la suppression', error: error.message });
+    res.status(500).json({ message: 'Erreur lors de la récupération de vos annonces.', error: error.message });
   }
 };
 
-// 5. Mettre à jour une annonce (Protégé)
+// 5.Changer le statut d'une annonce (ACTIVE, SOLD, ARCHIVED)
+exports.updateListingStatus = async (req, res) => {
+  try {
+    const userId = req.user._id || req.user.id;
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const validStatuses = ['ACTIVE', 'SOLD', 'ARCHIVED'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ message: 'Statut invalide.' });
+    }
+
+    const listing = await Listing.findById(id);
+    if (!listing) {
+      return res.status(404).json({ message: 'Annonce non trouvée.' });
+    }
+
+    // Vérification de propriété
+    if (listing.seller.toString() !== userId.toString()) {
+      return res.status(403).json({ message: 'Action non autorisée sur cette annonce.' });
+    }
+
+    listing.status = status;
+    await listing.save();
+
+    res.json({ message: 'Statut mis à jour avec succès.', listing });
+  } catch (error) {
+    res.status(500).json({ message: 'Erreur lors de la mise à jour du statut.', error: error.message });
+  }
+};
+
+// 6. Supprimer une annonce (Protégé)
+exports.deleteListing = async (req, res) => {
+  try {
+    const userId = req.user._id || req.user.id;
+    const { id } = req.params;
+
+    const listing = await Listing.findById(id);
+    if (!listing) {
+      return res.status(404).json({ message: 'Annonce non trouvée.' });
+    }
+
+    // Vérification de propriété
+    if (listing.seller.toString() !== userId.toString()) {
+      return res.status(403).json({ message: 'Action non autorisée sur cette annonce.' });
+    }
+
+    await Listing.findByIdAndDelete(id);
+
+    res.json({ message: 'Annonce supprimée avec succès.' });
+  } catch (error) {
+    res.status(500).json({ message: 'Erreur lors de la suppression de l\'annonce.', error: error.message });
+  }
+};
+
+// 7. Mettre à jour une annonce (Protégé)
 exports.updateListing = async (req, res) => {
   try {
     const listing = await Listing.findById(req.params.id);
@@ -115,7 +161,7 @@ exports.updateListing = async (req, res) => {
 
     await listing.save();
 
-    await listing.populate('seller', 'username lightningAddress');
+    await listing.populate('seller', 'pseudo lightningAddress');
 
     res.json({
       message: 'Annonce mise à jour avec succès',

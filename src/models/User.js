@@ -2,12 +2,19 @@ const mongoose = require('mongoose');
 
 const userSchema = new mongoose.Schema(
   {
-    username: {
+    email: {
       type: String,
-      required: [true, 'Le nom d\'utilisateur est requis'],
+      required: [true, "L'adresse email est requise"],
       unique: true,
       trim: true,
-      minlength: [3, 'Le pseudo doit contenir au moins 3 caractères'],
+      lowercase: true,
+      match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, "Veuillez fournir une adresse email valide"],
+    },
+    pseudo: {
+      type: String,
+      required: [true, "Le pseudo est requis"],
+      trim: true,
+      minlength: [3, "Le pseudo doit contenir au moins 3 caractères"],
     },
     password: {
       type: String,
@@ -19,6 +26,12 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    favorites: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Listing',
+      },
+    ],
   },
   {
     timestamps: true, // Génère automatiquement createdAt et updatedAt
