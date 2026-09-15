@@ -8,6 +8,7 @@ const authRoutes = require('./routes/authRoutes');
 const listingRoutes = require('./routes/listingRoutes');
 const userRoutes = require('./routes/userRoutes');
 const meetupRoutes = require('./routes/meetupRoutes');
+const lightningRoutes = require('./routes/lightningRoutes');
 
 dotenv.config();
 
@@ -25,6 +26,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/listings', listingRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/meetups', meetupRoutes);
+app.use('/api/lightning', lightningRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'API BitLister opérationnelle (CommonJS)' });
