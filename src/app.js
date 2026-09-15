@@ -1,4 +1,6 @@
 const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const connectDB = require('./config/db');
@@ -32,6 +34,39 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'API BitLister opérationnelle (CommonJS)' });
 });
 
-app.listen(PORT, () => {
-  console.log(`⚡️ Serveur BitLister démarré sur http://localhost:${PORT}`);
+// 3. Création du serveur HTTP enveloppant Express
+const server = http.createServer(app);
+
+// 4. Initialisation de Socket.io
+const io = new Server(server, {
+  cors: {
+    origin: 'http://localhost:4200', // URL d'Angular en dev
+    methods: ['GET', 'POST']
+  }
+});
+
+// 5. Gestion des événements WebSocket (Chiffrement E2EE P2P)
+io.on('connection', (socket) => {
+  console.log(`🔌 Utilisateur connecté au WebSocket : ${socket.id}`);
+
+  // Rejoindre un canal de discussion dédié
+  socket.on('join_chat', (chatRoomId) => {
+    socket.join(chatRoomId);
+    console.log(`👤 Socket ${socket.id} a rejoint le canal : ${chatRoomId}`);
+  });
+
+  // Relayer le message chiffré vers l'autre utilisateur
+  socket.on('send_message', (data) => {
+    // data contient : { chatRoomId, senderId, encryptedContent, timestamp }
+    io.to(data.chatRoomId).emit('receive_message', data);
+  });
+
+  socket.on('disconnect', () => {
+    console.log(`❌ Utilisateur déconnecté : ${socket.id}`);
+  });
+});
+
+// 6. Démarrer le serveur HTTP (au lieu de app.listen)
+server.listen(PORT, () => {
+  console.log(`⚡️ Serveur BitLister et WebSockets démarrés sur http://localhost:${PORT}`);
 });
