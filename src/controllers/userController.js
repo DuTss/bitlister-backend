@@ -144,24 +144,32 @@ exports.getFavorites = async (req, res) => {
 // 5. Demander un lien de modification de mot de passe par email
 exports.requestPasswordReset = async (req, res) => {
   try {
-    const userId = req.user.userId || req.user.id || req.user._id;
-    const user = await User.findById(userId);
+    // 1. Récupération de l'email depuis le body (ou depuis req.user si la requête est authentifiée)
+    const email = req.body.email || (req.user && (req.user.email || req.user.username));
 
-    if (!user) {
-      return res.status(404).json({ message: 'Utilisateur non trouvé.' });
+    if (!email) {
+      return res.status(400).json({ message: 'Veuillez fournir une adresse e-mail.' });
     }
 
-    // Génération du token éphémère (1 heure)
+    // 2. Recherche par e-mail sans passer par req.user.userId
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
+
+    if (!user) {
+      // Réponse générique pour des raisons de sécurité
+      return res.json({ message: 'Si cette adresse e-mail existe, un e-mail de réinitialisation vient d\'être envoyé.' });
+    }
+
+    // 3. Génération du token
     const resetToken = crypto.randomBytes(32).toString('hex');
     user.resetPasswordToken = resetToken;
-    user.resetPasswordExpires = Date.now() + 3600000; 
+    user.resetPasswordExpires = Date.now() + 3600000; // 1 heure
 
     await user.save();
 
-    // Envoi de l'email via la configuration Nodemailer
-    await sendResetPasswordEmail(user.email || user.username, resetToken);
+    // 4. Envoi de l'e-mail
+    await sendResetPasswordEmail(user.email, resetToken);
 
-    res.json({ message: 'Un e-mail de confirmation a été envoyé.' });
+    res.json({ message: 'Si cette adresse e-mail existe, un e-mail de réinitialisation vient d\'être envoyé.' });
   } catch (error) {
     res.status(500).json({ message: 'Erreur lors de l\'envoi de l\'email.', error: error.message });
   }
@@ -199,5 +207,37 @@ exports.resetPassword = async (req, res) => {
     res.json({ message: 'Votre mot de passe a été modifié avec succès.' });
   } catch (error) {
     res.status(500).json({ message: 'Erreur lors de la modification du mot de passe.', error: error.message });
+  }
+};
+
+// 7. Vérifier le token de confirmation d'email (Route Publique)
+exports.verifyEmail = async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ message: 'Token de vérification manquant.' });
+    }
+
+    // Recherche de l'utilisateur avec ce token non expiré
+    const user = await User.findOne({
+      emailVerificationToken: token,
+      emailVerificationExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: 'Le lien d\'activation est invalide ou a expiré.' });
+    }
+
+    // Validation du compte et suppression du token
+    user.isVerified = true;
+    user.emailVerificationToken = null;
+    user.emailVerificationExpires = null;
+
+    await user.save();
+
+    res.json({ message: 'Votre compte a été activé avec succès ! Vous pouvez maintenant vous connecter.' });
+  } catch (error) {
+    res.status(500).json({ message: 'Erreur lors de la vérification de l\'e-mail.', error: error.message });
   }
 };
