@@ -5,12 +5,16 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const connectDB = require('./config/db');
 
+// Déclaration modèle de l'API
+const Message = require('./models/Message');
+
 // Import des routes
 const authRoutes = require('./routes/authRoutes');
 const listingRoutes = require('./routes/listingRoutes');
 const userRoutes = require('./routes/userRoutes');
 const meetupRoutes = require('./routes/meetupRoutes');
 const lightningRoutes = require('./routes/lightningRoutes');
+const chatRoutes = require('./routes/chatRoutes')
 
 dotenv.config();
 
@@ -29,6 +33,7 @@ app.use('/api/listings', listingRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/meetups', meetupRoutes);
 app.use('/api/lightning', lightningRoutes);
+app.use('/api/chat', chatRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'API BitLister opérationnelle (CommonJS)' });
@@ -55,10 +60,33 @@ io.on('connection', (socket) => {
     console.log(`👤 Socket ${socket.id} a rejoint le canal : ${chatRoomId}`);
   });
 
-  // Relayer le message chiffré vers l'autre utilisateur
-  socket.on('send_message', (data) => {
-    // data contient : { chatRoomId, senderId, encryptedContent, timestamp }
-    io.to(data.chatRoomId).emit('receive_message', data);
+  socket.on('share_public_key', (data) => {
+    // Relayer la clé publique aux autres membres du canal
+    socket.to(data.chatRoomId).emit('receive_public_key', data);
+  });
+
+  // Quand un utilisateur demande la clé publique des membres de la room
+  socket.on('request_public_key', (data) => {
+    socket.to(data.chatRoomId).emit('public_key_requested', data);
+  });
+
+  // Enregistrer puis relayer le message chiffré
+  socket.on('send_message', async (data) => {
+    try {
+      // 1. Sauvegarde en BDD MongoDB
+      const newMessage = new Message({
+        chatRoomId: data.chatRoomId,
+        senderId: data.senderId,
+        encryptedContent: data.encryptedContent,
+        timestamp: data.timestamp || new Date()
+      });
+      await newMessage.save();
+
+      // 2. Diffusion du message aux utilisateurs de la room
+      io.to(data.chatRoomId).emit('receive_message', data);
+    } catch (err) {
+      console.error('Erreur sauvegarde message chiffré en BDD :', err);
+    }
   });
 
   socket.on('disconnect', () => {
