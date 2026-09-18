@@ -31,10 +31,12 @@ router.get('/user/:userId/conversations', async (req, res) => {
       {
         $group: {
           _id: '$chatRoomId',
-          lastMessage: { $first: '$encryptedContent' },
+        //   lastMessage: { $first: '$encryptedContent' },
           lastTimestamp: { $first: '$timestamp' },
           senderId: { $first: '$senderId' },
-          recipientId: { $first: '$recipientId' }
+          recipientId: { $first: '$recipientId' },
+          lastEncryptedForRecipient: { $first: '$encryptedForRecipient' },
+          lastEncryptedForSender: { $first: '$encryptedForSender' },
         }
       },
       {

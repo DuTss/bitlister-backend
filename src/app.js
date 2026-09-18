@@ -52,10 +52,9 @@ const io = new Server(server, {
 
 // 5. Gestion des événements WebSocket (Chiffrement E2EE P2P)
 io.on('connection', (socket) => {
-  console.log(`🔌 Utilisateur connecté au WebSocket : ${socket.id}`);
 
   // Rejoindre un canal de discussion dédié
-  socket.on('join_chat', (chatRoomId) => {
+  socket.on('joinRoom', (chatRoomId) => {
     socket.join(chatRoomId);
     console.log(`👤 Socket ${socket.id} a rejoint le canal : ${chatRoomId}`);
   });
@@ -71,23 +70,28 @@ io.on('connection', (socket) => {
   });
 
   // Enregistrer puis relayer le message chiffré
-  socket.on('send_message', async (data) => {
-    try {
-      // 1. Sauvegarde en BDD MongoDB
-      const newMessage = new Message({
-        chatRoomId: data.chatRoomId,
-        senderId: data.senderId,
-        encryptedContent: data.encryptedContent,
-        timestamp: data.timestamp || new Date()
-      });
-      await newMessage.save();
+socket.on('sendMessage', async (data) => {
+  try {
+    const { chatRoomId, senderId, recipientId, encryptedForRecipient, encryptedForSender, timestamp } = data;
 
-      // 2. Diffusion du message aux utilisateurs de la room
-      io.to(data.chatRoomId).emit('receive_message', data);
-    } catch (err) {
-      console.error('Erreur sauvegarde message chiffré en BDD :', err);
-    }
-  });
+    // 1. Sauvegarde dans MongoDB avec les 2 champs chiffrés
+    const newMessage = new Message({
+      chatRoomId,
+      senderId,
+      recipientId,
+      encryptedForRecipient,
+      encryptedForSender,
+      timestamp: timestamp || new Date()
+    });
+
+    await newMessage.save();
+
+    // 2. Émission en temps réel aux autres membres de la room
+    io.to(chatRoomId).emit('receiveMessage', data);
+  } catch (error) {
+    console.error('Erreur sauvegarde message socket :', error);
+  }
+});
 
   socket.on('disconnect', () => {
     console.log(`❌ Utilisateur déconnecté : ${socket.id}`);

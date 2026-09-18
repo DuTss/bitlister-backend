@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/userController');
 const authMiddleware = require('../middlewares/auth');
+const User = require('../models/User');
 
 // --- Routes Profil ---
 router.get('/profile', authMiddleware, userController.getProfile);
@@ -21,9 +22,22 @@ router.post('/verify-email', userController.verifyEmail);
 router.put('/:id/public-key', async (req, res) => {
   try {
     const { publicKey } = req.body;
-    await User.findByIdAndUpdate(req.params.id, { publicKey });
-    res.json({ message: 'Clé publique mise à jour.' });
+
+    // Utilisation de { new: true } pour s'assurer que Mongoose ajoute
+    // la propriété publicKey aux utilisateurs existants qui ne l'avaient pas.
+    const updatedUser = await User.findByIdAndUpdate(
+      req.params.id,
+      { $set: { publicKey } },
+      { new: true }
+    );
+
+    if (!updatedUser) {
+      return res.status(404).json({ message: 'Utilisateur non trouvé.' });
+    }
+
+    res.json({ message: 'Clé publique mise à jour avec succès.' });
   } catch (err) {
+    console.error('Erreur sauvegarde clé publique :', err);
     res.status(500).json({ message: 'Erreur lors de la sauvegarde de la clé.' });
   }
 });
